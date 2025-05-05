@@ -62,10 +62,14 @@ def process_input(question):
     # vectorstore.get(include=['embeddings', 'documents', 'metadatas'])
     retriever = vectorstore.as_retriever()
 
-    after_rag_template = """ Answer the question based only on the following context,:{context} Question:{question} What are the top 10 most likely diagnoses? Be precise, listing one diagnosis per line, and try to cover many unique possibilities (at least 10).Ensure the order starts with the most likely. The top 10 diagnoses are."""
+    after_rag_template = """ Answer the question based only on the following context,:{context} Question:{question} \nWhat are the top 10 most likely diagnoses? Be precise, listing one diagnosis per line, and try to cover many unique possibilities (at least 10).Ensure the order starts with the most likely. The top 10 diagnoses are."""
+    no_rag_template = """Question:{question} \nWhat are the top 10 most likely diagnoses? Be precise, listing one diagnosis per line, and try to cover many unique possibilities (at least 10).Ensure the order starts with the most likely. The top 10 diagnoses are."""
+   
     # print(after_rag_template)
 
     after_rag_prompt = ChatPromptTemplate.from_template(after_rag_template)
+
+    no_rag_prompt = ChatPromptTemplate.from_template(no_rag_template)
     # print(after_rag_prompt)
     after_rag_chain = (
             {"context": retriever, "question": RunnablePassthrough()}
@@ -74,17 +78,26 @@ def process_input(question):
             | StrOutputParser()
     )
 
-    return after_rag_chain.invoke(question)
+
+
+    no_rag_chain = (
+            {"question": RunnablePassthrough()}
+            | no_rag_prompt
+            | model_local
+            | StrOutputParser()
+    )
+
+    return after_rag_chain.invoke(question), no_rag_chain.invoke(question)
 
     # streamlit UI
 
 
-st.title("Differential Diagnosis with Medical Textbook RAG")
+st.title("Differential Diagnosis with Medical Text RAG")
 
 # st.write("enter urls (one per line) and a question to query the documents")
 
 with st.sidebar:
-    st.write("Upload your Medical Textbook in PDF format")
+    st.write("Upload your Medical Text in PDF format")
     # UI for input fields
 
     # urls = st.text_area("Enter URLs separated by a New Line", height =150)
@@ -126,7 +139,7 @@ with st.sidebar:
         st.write("Textbook Uploaded")
 
 question = st.text_input("Enter the Case")
-topics = st.selectbox("Enter related Chapter", ())
+# topics = st.selectbox("Enter related Chapter", ())
 # button = st.text_input("Question")
 
 if st.button('List differential diagnosis'):
@@ -136,9 +149,11 @@ if st.button('List differential diagnosis'):
         # docs = [PyPDFLoader(os.path.join("UploadedSOPs",pdf)).load() for pdf in DocumentList]
         # docs_list = [item for sublist in docs for item in sublist]
 
-        answer = process_input(question)
+        rag_answer, no_rag_answer = process_input(question)
         # print(answer)
-        st.text_area("Answer", value=answer, height=300)
+        st.text_area("Answer with RAG", value=rag_answer, height=300)
+
+        st.text_area("Answer without RAG", value=no_rag_answer, height=300)
 
     # These comments should b removed before production
     # NER
